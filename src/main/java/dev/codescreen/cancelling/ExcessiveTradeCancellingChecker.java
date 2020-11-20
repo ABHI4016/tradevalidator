@@ -2,7 +2,6 @@ package dev.codescreen.cancelling;
 
 import dev.codescreen.cancelling.model.OrderTracker;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -100,6 +99,7 @@ final class ExcessiveTradeCancellingChecker {
                         if (currentCompany.equals(company)) {
                             int lineNo = currentLineNumber;
                             if (tracker.nextWindowStartLineNo < 0 && recordTime.isAfter(tracker.windowStart)) {
+                                tracker.nextWindowStartLineNo = currentLineNumber;
                                 Thread t = new Thread(() -> checkForOrders(company, lineNo, toBeProcessed, toBeProcessedLocation, eliminatedCompanies, processedCompanies));
                                 t.start();
                                 t.join();
