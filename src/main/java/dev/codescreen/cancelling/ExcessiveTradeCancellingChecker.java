@@ -2,12 +2,15 @@ package dev.codescreen.cancelling;
 
 import dev.codescreen.cancelling.model.OrderTracker;
 
+import java.io.File;
 import java.io.InputStream;
+import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.logging.Logger;
 
 /**
  * Checks which companies from the Trades.data are involved in excessive cancelling.
@@ -29,9 +32,6 @@ final class ExcessiveTradeCancellingChecker {
 
     static List<String> companiesInvolvedInExcessiveCancellations() {
         Set<String> eliminatedCompanies = ConcurrentHashMap.newKeySet();
-
-        Map<String, Integer> toBeProcessedLocation = new ConcurrentHashMap<>();
-
 
         Scanner reader = new Scanner(Objects.requireNonNull(ClassLoader.getSystemResourceAsStream("Trades.data")));
         String line = reader.nextLine();
@@ -73,9 +73,9 @@ final class ExcessiveTradeCancellingChecker {
             try {
                 currentCompany = data[1];
                 if (!currentCompany.equals(company) && !threads.containsKey(currentCompany)) {
-                    int lineNumberNew = currentLineNumber;
+                    int currentLineCopy = currentLineNumber;
                     Thread processNewCompany = new Thread(() ->
-                            checkForOrders(company, lineNumber, eliminatedCompanies));
+                            checkForOrders(currentCompany, currentLineCopy, eliminatedCompanies));
                     threads.put(currentCompany,processNewCompany);
                     processNewCompany.start();
                 } else {
@@ -83,12 +83,11 @@ final class ExcessiveTradeCancellingChecker {
                         tracker.windowStart = recordTime;
                         updateOrderCounts(tracker, data);
                     } else if (currentLineNumber > lineNumber) {
-                        if (recordTime.isAfter(tracker.windowStart.plusSeconds(60))) {
+                        if (recordTime.isAfter(tracker.windowStart.plusSeconds(58))) {
                             if (!tracker.isFair() || eliminatedCompanies.contains(company)) {
                                 eliminatedCompanies.add(company);
                                 break;
                             }
-
                             is.close();
                             break;
                         } else {
@@ -98,8 +97,8 @@ final class ExcessiveTradeCancellingChecker {
                                 Thread t = new Thread(() -> checkForOrders(company, lineNo, eliminatedCompanies));
                                 t.start();
                                 t.join();
-                                updateOrderCounts(tracker, data);
                             }
+                            updateOrderCounts(tracker, data);
                         }
 
                     }
