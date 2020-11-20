@@ -25,10 +25,9 @@ final class ExcessiveTradeCancellingChecker {
      * Returns the list of companies that are involved in excessive cancelling.
      */
 
-    static Set<Thread> threads = ConcurrentHashMap.newKeySet();
+    static Map<String, Thread> threads = new ConcurrentHashMap<>();
 
     static List<String> companiesInvolvedInExcessiveCancellations() {
-        Set<String> processedCompanies = ConcurrentHashMap.newKeySet();
         Set<String> eliminatedCompanies = ConcurrentHashMap.newKeySet();
 
         Map<String, Integer> toBeProcessedLocation = new ConcurrentHashMap<>();
@@ -39,8 +38,15 @@ final class ExcessiveTradeCancellingChecker {
         String[] data = line.split(",");
 
 
-        processedCompanies.add(data[1]);
-        checkForOrders(data[1], 1, toBeProcessedLocation, eliminatedCompanies, processedCompanies);
+        Thread t = new Thread(() -> checkForOrders(data[1], 1, eliminatedCompanies));
+        threads.put(data[1],t);
+        t.start();
+
+        threads.values().forEach( thread -> {
+            try {
+                thread.join();
+            }catch (InterruptedException ex){}
+        });
 
         return new ArrayList<>(eliminatedCompanies);
 
@@ -49,9 +55,7 @@ final class ExcessiveTradeCancellingChecker {
     private static void checkForOrders(
             String company,
             int lineNumber,
-            Map<String, Integer> toBeProcessedLocation,
-            Set<String> eliminatedCompanies,
-            Set<String> processedCompanies
+            Set<String> eliminatedCompanies
     ) {
         System.out.println("Processing: [" + company + "]");
         int currentLineNumber = 1;
@@ -68,12 +72,11 @@ final class ExcessiveTradeCancellingChecker {
 
             try {
                 currentCompany = data[1];
-                if (!currentCompany.equals(company) && !processedCompanies.contains(currentCompany)) {
+                if (!currentCompany.equals(company) && !threads.containsKey(currentCompany)) {
                     int lineNumberNew = currentLineNumber;
-                    processedCompanies.add(company);
                     Thread processNewCompany = new Thread(() ->
-                            checkForOrders(company, lineNumber, toBeProcessedLocation, eliminatedCompanies, processedCompanies));
-                    threads.add(processNewCompany);
+                            checkForOrders(company, lineNumber, eliminatedCompanies));
+                    threads.put(currentCompany,processNewCompany);
                     processNewCompany.start();
                 } else {
                     if (currentLineNumber == lineNumber) {
@@ -92,7 +95,7 @@ final class ExcessiveTradeCancellingChecker {
                             int lineNo = currentLineNumber;
                             if (tracker.nextWindowStartLineNo < 0 && recordTime.isAfter(tracker.windowStart)) {
                                 tracker.nextWindowStartLineNo = currentLineNumber;
-                                Thread t = new Thread(() -> checkForOrders(company, lineNo, toBeProcessedLocation, eliminatedCompanies, processedCompanies));
+                                Thread t = new Thread(() -> checkForOrders(company, lineNo, eliminatedCompanies));
                                 t.start();
                                 t.join();
                                 updateOrderCounts(tracker, data);
