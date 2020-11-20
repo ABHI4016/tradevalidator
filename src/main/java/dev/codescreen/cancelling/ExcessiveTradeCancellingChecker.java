@@ -47,7 +47,6 @@ final class ExcessiveTradeCancellingChecker {
             processedCompanies.add(company);
             int lineNumber = toBeProcessedLocation.get(company);
             checkForOrders(company, lineNumber, toBeProcessed, toBeProcessedLocation, eliminatedCompanies, processedCompanies);
-
         }
 
         return new ArrayList<>(eliminatedCompanies);
@@ -93,13 +92,15 @@ final class ExcessiveTradeCancellingChecker {
 
                         if (currentCompany.equals(company)) {
                             is.close();
+                            break;
                         } else {
                             updateToBeProcessed(toBeProcessed, toBeProcessedLocation, processedCompanies, currentLineNumber, currentCompany);
                         }
                     } else {
                         if (currentCompany.equals(company)) {
+                            int lineNo = currentLineNumber;
                             if (tracker.nextWindowStartLineNo < 0 && recordTime.isAfter(tracker.windowStart)) {
-                                Thread t = new Thread(() -> checkForOrders(company, lineNumber, toBeProcessed, toBeProcessedLocation, eliminatedCompanies, processedCompanies));
+                                Thread t = new Thread(() -> checkForOrders(company, lineNo, toBeProcessed, toBeProcessedLocation, eliminatedCompanies, processedCompanies));
                                 t.start();
                                 t.join();
                             }
