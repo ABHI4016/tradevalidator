@@ -42,7 +42,7 @@ final class ExcessiveTradeCancellingChecker {
         processedCompanies.add(data[1]);
         checkForOrders(data[1], 1, toBeProcessed, toBeProcessedLocation, eliminatedCompanies, processedCompanies);
 
-        while(toBeProcessed.peek()!=null){
+        while (toBeProcessed.peek() != null) {
             String company = toBeProcessed.poll();
             processedCompanies.add(company);
             int lineNumber = toBeProcessedLocation.get(company);
@@ -62,7 +62,7 @@ final class ExcessiveTradeCancellingChecker {
             Set<String> eliminatedCompanies,
             Set<String> processedCompanies
     ) {
-        System.out.println("Processing: ["+company+"]");
+        System.out.println("Processing: [" + company + "]");
         int currentLineNumber = 1;
         InputStream is = Objects.requireNonNull(ClassLoader.getSystemResourceAsStream("Trades.data"));
         Scanner reader = new Scanner(is);
@@ -73,67 +73,57 @@ final class ExcessiveTradeCancellingChecker {
             String line = reader.nextLine();
             String[] data = line.split(",");
             LocalDateTime recordTime = LocalDateTime.parse(data[0].trim(), format);
-            String recordCompany;
+            String currentCompany;
 
             try {
-                recordCompany = data[1];
-
-
+                currentCompany = data[1];
                 if (currentLineNumber == lineNumber) {
-                    System.out.println(line);
-
-                    if (recordCompany.equals(company)) {
+                    if (currentCompany.equals(company)) {
                         tracker.windowStart = recordTime;
                         updateOrderCounts(tracker, data);
                     } else {
-                        if (!toBeProcessed.contains(recordCompany) && !processedCompanies.contains(recordCompany)) {
-                            toBeProcessed.add(recordCompany);
-                            toBeProcessedLocation.put(recordCompany, currentLineNumber);
-                        }
+                        updateToBeProcessed(toBeProcessed, toBeProcessedLocation, processedCompanies, currentLineNumber, currentCompany);
                     }
                 } else if (currentLineNumber > lineNumber) {
-                    System.out.println(line);
+                    if (recordTime.isAfter(tracker.windowStart.plusSeconds(60))) {
+                        if (!tracker.isFair() || eliminatedCompanies.contains(company)) {
+                            eliminatedCompanies.add(company);
+                            break;
+                        }
 
-                    if (recordCompany.equals(company)) {
-                        if (recordTime.isAfter(tracker.windowStart.plusSeconds(60))) {
-                            if (!tracker.isFair() || eliminatedCompanies.contains(company)) {
-                                eliminatedCompanies.add(company);
-                                break;
-                            } else {
-                                try {
-                                    is.close();
-                                    checkForOrders(company, tracker.nextWindowStartLineNo==-1?currentLineNumber: tracker.nextWindowStartLineNo, toBeProcessed, toBeProcessedLocation, eliminatedCompanies, processedCompanies);
-                                } catch (IOException ex) {
-                                    ex.printStackTrace();
-                                }
-                            }
+                        if (currentCompany.equals(company)) {
+                            is.close();
                         } else {
-                            if (tracker.nextWindowStartLineNo < 0 && recordTime.isAfter(tracker.windowStart)) {
-                                tracker.nextWindowStartLineNo = currentLineNumber;
-                            }
-                            updateOrderCounts(tracker, data);
-
+                            updateToBeProcessed(toBeProcessed, toBeProcessedLocation, processedCompanies, currentLineNumber, currentCompany);
                         }
                     } else {
-                        if (!toBeProcessed.contains(recordCompany) && !processedCompanies.contains(recordCompany)) {
-                            toBeProcessed.add(recordCompany);
-                            toBeProcessedLocation.put(recordCompany, currentLineNumber);
-                        }
-                        if (recordTime.isAfter(tracker.windowStart.plusSeconds(60))) {
-                            if (!tracker.isFair()) {
-                                eliminatedCompanies.add(company);
-                                break;
+                        if (currentCompany.equals(company)) {
+                            if (tracker.nextWindowStartLineNo < 0 && recordTime.isAfter(tracker.windowStart)) {
+                                Thread t = new Thread(() -> checkForOrders(company, lineNumber, toBeProcessed, toBeProcessedLocation, eliminatedCompanies, processedCompanies));
+                                t.start();
+                                t.join();
                             }
+                            updateOrderCounts(tracker, data);
+                        } else {
+                            updateToBeProcessed(toBeProcessed, toBeProcessedLocation, processedCompanies, currentLineNumber, currentCompany);
                         }
                     }
+
                 }
             } catch (Exception ex) {
-                ex.printStackTrace();
+//                ex.printStackTrace();
             }
             currentLineNumber++;
         }
 
 
+    }
+
+    private static void updateToBeProcessed(Queue<String> toBeProcessed, Map<String, Integer> toBeProcessedLocation, Set<String> processedCompanies, int currentLineNumber, String currentCompany) {
+        if (!toBeProcessed.contains(currentCompany) && !processedCompanies.contains(currentCompany)) {
+            toBeProcessed.add(currentCompany);
+            toBeProcessedLocation.put(currentCompany, currentLineNumber);
+        }
     }
 
     private static void updateOrderCounts(OrderTracker tracker, String[] data) {
