@@ -57,7 +57,6 @@ final class ExcessiveTradeCancellingChecker {
             int lineNumber,
             Set<String> eliminatedCompanies
     ) {
-        System.out.println("Processing: [" + company + "]");
         int currentLineNumber = 1;
         InputStream is = Objects.requireNonNull(ClassLoader.getSystemResourceAsStream("Trades.data"));
         Scanner reader = new Scanner(is);
@@ -109,7 +108,6 @@ final class ExcessiveTradeCancellingChecker {
             }
             currentLineNumber++;
         }
-
 
     }
 
