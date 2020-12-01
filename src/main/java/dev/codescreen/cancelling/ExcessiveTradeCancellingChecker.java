@@ -2,15 +2,13 @@ package dev.codescreen.cancelling;
 
 import dev.codescreen.cancelling.model.OrderTracker;
 
-import java.io.File;
-import java.io.InputStream;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.logging.Logger;
+import java.util.concurrent.*;
 
 /**
  * Checks which companies from the Trades.data are involved in excessive cancelling.
@@ -28,95 +26,132 @@ final class ExcessiveTradeCancellingChecker {
      * Returns the list of companies that are involved in excessive cancelling.
      */
 
-    static Map<String, Thread> threads = new ConcurrentHashMap<>();
+
+    static Set<String> processedCompanies = ConcurrentHashMap.newKeySet();
+
+    static ConcurrentHashMap<String, List<Thread>> companyToThreads = new ConcurrentHashMap<>();
 
     static List<String> companiesInvolvedInExcessiveCancellations() {
         Set<String> eliminatedCompanies = ConcurrentHashMap.newKeySet();
+        try {
+            List<String> records = Files.readAllLines(Paths.get("target\\classes\\Trades.data"));
+            String[] record = records.get(0).split(",");
+            processedCompanies.add(record[1]);
+            verifyOrders(records, "Cauldron cooking", 0, eliminatedCompanies);
 
-        Scanner reader = new Scanner(Objects.requireNonNull(ClassLoader.getSystemResourceAsStream("Trades.data")));
-        String line = reader.nextLine();
-        String[] data = line.split(",");
-
-
-        Thread t = new Thread(() -> checkForOrders(data[1], 1, eliminatedCompanies));
-        threads.put(data[1],t);
-        t.start();
-
-        threads.values().forEach( thread -> {
-            try {
-                thread.join();
-            }catch (InterruptedException ex){}
-        });
-
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
         return new ArrayList<>(eliminatedCompanies);
 
     }
 
-    private static void checkForOrders(
-            String company,
-            int lineNumber,
-            Set<String> eliminatedCompanies
-    ) {
-        int currentLineNumber = 1;
-        InputStream is = Objects.requireNonNull(ClassLoader.getSystemResourceAsStream("Trades.data"));
-        Scanner reader = new Scanner(is);
-        OrderTracker tracker = new OrderTracker();
+    private static void verifyOrders(List<String> records, String currentCompany, int lineNum, Set<String> eliminatedCompanies) {
+        System.out.println("Processing: " + currentCompany);
+        LinkedList<Integer> lineNumbers = new LinkedList<>();
+        lineNumbers.add(lineNum);
+        List<Thread> threads = new LinkedList<>();
 
 
-        while (reader.hasNextLine()) {
-            String line = reader.nextLine();
-            String[] data = line.split(",");
-            LocalDateTime recordTime = LocalDateTime.parse(data[0].trim(), format);
-            String currentCompany;
+        while (lineNumbers.peek() != null) {
+            int lineNumber = lineNumbers.peek();
+            lineNumbers.removeFirst();
+            OrderTracker tracker = null;
+            if (!eliminatedCompanies.contains(currentCompany)) {
+                while (lineNumber < records.size()) {
+                    String[] record = records.get(lineNumber).split(",");
+                    if (record.length == 4) {
+                        LocalDateTime recordTime = LocalDateTime.parse(record[0].trim(), format);
+                        if (record[1].equals(currentCompany)) {
+                            if (tracker == null) {
+                                tracker = new OrderTracker();
+                                tracker.companyName = record[1];
+                                tracker.windowStart = recordTime;
+                                updateOrderCounts(tracker, record);
+                            } else {
 
-            try {
-                currentCompany = data[1];
-                if (!currentCompany.equals(company) && !threads.containsKey(currentCompany)) {
-                    int currentLineCopy = currentLineNumber;
-                    Thread processNewCompany = new Thread(() ->
-                            checkForOrders(currentCompany, currentLineCopy, eliminatedCompanies));
-                    threads.put(currentCompany,processNewCompany);
-                    processNewCompany.start();
-                } else {
-                    if (currentLineNumber == lineNumber) {
-                        tracker.windowStart = recordTime;
-                        updateOrderCounts(tracker, data);
-                    } else if (currentLineNumber > lineNumber) {
-                        if (recordTime.isAfter(tracker.windowStart.plusSeconds(58))) {
-                            if (!tracker.isFair() || eliminatedCompanies.contains(company)) {
-                                eliminatedCompanies.add(company);
+                                if (recordTime.equals(tracker.windowStart)) {
+                                    updateOrderCounts(tracker, record);
+                                } else {
+                                    if (recordTime.isAfter(tracker.windowStart.plusSeconds(60))) {
+                                        if (!tracker.isFair()) {
+                                            eliminatedCompanies.add(currentCompany);
+                                        }
+                                        break;
+                                    } else {
+                                        updateOrderCounts(tracker, record);
+                                        if (lineNumbers.size() > 0) {
+                                            if (lineNumbers.getLast() < lineNumber) {
+                                                lineNumbers.add(lineNumber);
+                                            }
+                                        } else {
+                                            lineNumbers.add(lineNumber);
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+
+                            if (!processedCompanies.contains(record[1])) {
+                                int finalLineNumber = lineNumber;
+                                processedCompanies.add(record[1]);
+                                Thread thread = new Thread(() -> {
+                                    verifyOrders(records, record[1], finalLineNumber, eliminatedCompanies);
+                                });
+
+                                if (!companyToThreads.containsKey(record[1])) {
+                                    List<Thread> list = new LinkedList<>();
+                                    list.add(thread);
+                                    companyToThreads.put(record[1], list);
+                                    thread.start();
+                                    threads.add(thread);
+                                } else {
+                                    List<Thread> threadList = companyToThreads.get(record[1]);
+                                    threadList.add(thread);
+                                    companyToThreads.put(record[1], threadList);
+                                }
+                            }
+
+                            if (tracker!= null && recordTime.isAfter(tracker.windowStart.plusSeconds(60))) {
+                                if (!tracker.isFair()) {
+                                    eliminatedCompanies.add(currentCompany);
+                                }
                                 break;
                             }
-                            is.close();
-                            break;
-                        } else {
-                            int lineNo = currentLineNumber;
-                            if (tracker.nextWindowStartLineNo < 0 && recordTime.isAfter(tracker.windowStart)) {
-                                tracker.nextWindowStartLineNo = currentLineNumber;
-                                Thread t = new Thread(() -> checkForOrders(company, lineNo, eliminatedCompanies));
-                                t.start();
-                                t.join();
-                            }
-                            updateOrderCounts(tracker, data);
                         }
-
                     }
 
+
+                    lineNumber++;
                 }
-            } catch (Exception ex) {
-//                ex.printStackTrace();
+                if (lineNumbers.size() != 0 && !eliminatedCompanies.contains(currentCompany) && lineNumber < records.size()) {
+                    lineNumbers.add(lineNumber);
+                }
+            } else {
+                break;
             }
-            currentLineNumber++;
         }
 
+        System.out.println("Completed: " + currentCompany);
+
+        threads.forEach(thread -> {
+            if (thread != null) {
+                try {
+                    thread.join();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
     }
 
     private static void updateOrderCounts(OrderTracker tracker, String[] data) {
+        int orderCount = Integer.parseInt(data[3].trim());
         if (data[2].equals("F")) {
-            tracker.cancelledOrders += Integer.parseInt(data[3].trim());
-        } else {
-            tracker.newOrders += Integer.parseInt(data[3].trim());
+            tracker.cancelledOrders += orderCount;
         }
+
+        tracker.totalOrders += orderCount;
     }
 
 
