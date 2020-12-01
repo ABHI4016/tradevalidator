@@ -124,7 +124,7 @@ final class ExcessiveTradeCancellingChecker {
 
                     lineNumber++;
                 }
-                if (lineNumbers.size() != 0 && !eliminatedCompanies.contains(currentCompany) && lineNumber < records.size()) {
+                if (lineNumbers.size() == 0 && !eliminatedCompanies.contains(currentCompany) && lineNumber < records.size()) {
                     lineNumbers.add(lineNumber);
                 }
             } else {
