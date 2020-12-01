@@ -37,7 +37,7 @@ final class ExcessiveTradeCancellingChecker {
             List<String> records = Files.readAllLines(Paths.get("target\\classes\\Trades.data"));
             String[] record = records.get(0).split(",");
             processedCompanies.add(record[1]);
-            verifyOrders(records, "Cauldron cooking", 0, eliminatedCompanies);
+            verifyOrders(records, record[1], 0, eliminatedCompanies);
 
         } catch (IOException e) {
             e.printStackTrace();
