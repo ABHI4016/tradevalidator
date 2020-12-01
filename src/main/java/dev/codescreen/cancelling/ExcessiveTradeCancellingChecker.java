@@ -29,10 +29,10 @@ final class ExcessiveTradeCancellingChecker {
 
     static Set<String> processedCompanies = ConcurrentHashMap.newKeySet();
 
-    static ConcurrentHashMap<String, List<Thread>> companyToThreads = new ConcurrentHashMap<>();
+    static Set<String> eliminatedCompanies = ConcurrentHashMap.newKeySet();
+
 
     static List<String> companiesInvolvedInExcessiveCancellations() {
-        Set<String> eliminatedCompanies = ConcurrentHashMap.newKeySet();
         try {
             List<String> records = Files.readAllLines(Paths.get("target\\classes\\Trades.data"));
             String[] record = records.get(0).split(",");
@@ -42,6 +42,9 @@ final class ExcessiveTradeCancellingChecker {
         } catch (IOException e) {
             e.printStackTrace();
         }
+
+        processedCompanies.removeAll(eliminatedCompanies);
+        wellBehavedCount = processedCompanies.stream().count();
         return new ArrayList<>(eliminatedCompanies);
 
     }
@@ -99,20 +102,11 @@ final class ExcessiveTradeCancellingChecker {
                                     verifyOrders(records, record[1], finalLineNumber, eliminatedCompanies);
                                 });
 
-                                if (!companyToThreads.containsKey(record[1])) {
-                                    List<Thread> list = new LinkedList<>();
-                                    list.add(thread);
-                                    companyToThreads.put(record[1], list);
-                                    thread.start();
-                                    threads.add(thread);
-                                } else {
-                                    List<Thread> threadList = companyToThreads.get(record[1]);
-                                    threadList.add(thread);
-                                    companyToThreads.put(record[1], threadList);
-                                }
+                                thread.start();
+                                threads.add(thread);
                             }
 
-                            if (tracker!= null && recordTime.isAfter(tracker.windowStart.plusSeconds(60))) {
+                            if (tracker != null && recordTime.isAfter(tracker.windowStart.plusSeconds(60))) {
                                 if (!tracker.isFair()) {
                                     eliminatedCompanies.add(currentCompany);
                                 }
