@@ -1,6 +1,10 @@
 package dev.codescreen.cancelling;
 
 import dev.codescreen.cancelling.model.OrderTracker;
+import dev.codescreen.cancelling.model.OrderType;
+import dev.codescreen.cancelling.model.Tick;
+import dev.codescreen.cancelling.model.TickFactory;
+import dev.codescreen.cancelling.util.DefaultTimeStampStrategy;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -30,14 +34,14 @@ final class ExcessiveTradeCancellingChecker {
     static Set<String> processedCompanies = ConcurrentHashMap.newKeySet();
 
     static Set<String> eliminatedCompanies = ConcurrentHashMap.newKeySet();
-
+    static TickFactory tickFactory = new TickFactory(new DefaultTimeStampStrategy());
 
     static List<String> companiesInvolvedInExcessiveCancellations() {
         try {
             List<String> records = Files.readAllLines(Paths.get("target\\classes\\Trades.data"));
-            String[] record = records.get(0).split(",");
-            processedCompanies.add(record[1]);
-            verifyOrders(records, record[1], 0, eliminatedCompanies);
+            Tick tick = tickFactory.createTick(records.get(0));
+            processedCompanies.add(tick.getCompanyName());
+            verifyOrders(records, tick.getCompanyName(), 0, eliminatedCompanies);
 
         } catch (IOException e) {
             e.printStackTrace();
@@ -50,6 +54,7 @@ final class ExcessiveTradeCancellingChecker {
     }
 
     private static void verifyOrders(List<String> records, String currentCompany, int lineNum, Set<String> eliminatedCompanies) {
+
         System.out.println("Processing: " + currentCompany);
         LinkedList<Integer> lineNumbers = new LinkedList<>();
         lineNumbers.add(lineNum);
@@ -59,30 +64,31 @@ final class ExcessiveTradeCancellingChecker {
         while (lineNumbers.peek() != null) {
             int lineNumber = lineNumbers.peek();
             lineNumbers.removeFirst();
+
             OrderTracker tracker = null;
+
             if (!eliminatedCompanies.contains(currentCompany)) {
                 while (lineNumber < records.size()) {
-                    String[] record = records.get(lineNumber).split(",");
-                    if (record.length == 4) {
-                        LocalDateTime recordTime = LocalDateTime.parse(record[0].trim(), format);
-                        if (record[1].equals(currentCompany)) {
+                    Tick tick = tickFactory.createTick(records.get(lineNumber));
+                    if (tick != null) {
+                        if (tick.getCompanyName().equals(currentCompany)) {
                             if (tracker == null) {
                                 tracker = new OrderTracker();
-                                tracker.companyName = record[1];
-                                tracker.windowStart = recordTime;
-                                updateOrderCounts(tracker, record);
+                                tracker.companyName = tick.getCompanyName();
+                                tracker.windowStart = tick.getTimeStamp();
+                                updateOrderCounts(tracker, tick);
                             } else {
 
-                                if (recordTime.equals(tracker.windowStart)) {
-                                    updateOrderCounts(tracker, record);
+                                if (tick.getTimeStamp().equals(tracker.windowStart)) {
+                                    updateOrderCounts(tracker, tick);
                                 } else {
-                                    if (recordTime.isAfter(tracker.windowStart.plusSeconds(60))) {
+                                    if (validateTimeExpiry(tracker, tick)) {
                                         if (!tracker.isFair()) {
                                             eliminatedCompanies.add(currentCompany);
                                         }
                                         break;
                                     } else {
-                                        updateOrderCounts(tracker, record);
+                                        updateOrderCounts(tracker, tick);
                                         if (lineNumbers.size() > 0) {
                                             if (lineNumbers.getLast() < lineNumber) {
                                                 lineNumbers.add(lineNumber);
@@ -94,19 +100,18 @@ final class ExcessiveTradeCancellingChecker {
                                 }
                             }
                         } else {
-
-                            if (!processedCompanies.contains(record[1])) {
+                            if (!processedCompanies.contains(tick.getCompanyName())) {
                                 int finalLineNumber = lineNumber;
-                                processedCompanies.add(record[1]);
+                                processedCompanies.add(tick.getCompanyName());
                                 Thread thread = new Thread(() -> {
-                                    verifyOrders(records, record[1], finalLineNumber, eliminatedCompanies);
+                                    verifyOrders(records, tick.getCompanyName(), finalLineNumber, eliminatedCompanies);
                                 });
 
                                 thread.start();
                                 threads.add(thread);
                             }
 
-                            if (tracker != null && recordTime.isAfter(tracker.windowStart.plusSeconds(60))) {
+                            if (tracker != null && validateTimeExpiry(tracker, tick)) {
                                 if (!tracker.isFair()) {
                                     eliminatedCompanies.add(currentCompany);
                                 }
@@ -125,9 +130,6 @@ final class ExcessiveTradeCancellingChecker {
                 break;
             }
         }
-
-        System.out.println("Completed: " + currentCompany);
-
         threads.forEach(thread -> {
             if (thread != null) {
                 try {
@@ -139,13 +141,16 @@ final class ExcessiveTradeCancellingChecker {
         });
     }
 
-    private static void updateOrderCounts(OrderTracker tracker, String[] data) {
-        int orderCount = Integer.parseInt(data[3].trim());
-        if (data[2].equals("F")) {
-            tracker.cancelledOrders += orderCount;
+    private static boolean validateTimeExpiry(OrderTracker tracker, Tick tick) {
+        return tick.getTimeStamp().isAfter(tracker.windowStart.plusSeconds(60));
+    }
+
+    private static void updateOrderCounts(OrderTracker tracker, Tick tick) {
+        if (tick.getOrderType() == OrderType.CANCEL) {
+            tracker.cancelledOrders += tick.getCount();
         }
 
-        tracker.totalOrders += orderCount;
+        tracker.totalOrders += tick.getCount();
     }
 
 
