@@ -1,4 +1,4 @@
-package dev.codescreen.cancelling.util;
+package dev.codescreen.cancelling.util.creationStrategy;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;

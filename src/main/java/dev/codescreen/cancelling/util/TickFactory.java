@@ -1,9 +1,11 @@
-package dev.codescreen.cancelling.model;
+package dev.codescreen.cancelling.util;
 
-import dev.codescreen.cancelling.util.TimeStampStrategy;
+import dev.codescreen.cancelling.model.OrderType;
+import dev.codescreen.cancelling.model.Tick;
+import dev.codescreen.cancelling.util.creationStrategy.TimeStampStrategy;
 
 public class TickFactory {
-    private TimeStampStrategy timeStampStrategy;
+    private final TimeStampStrategy timeStampStrategy;
 
     public TickFactory(TimeStampStrategy timeStampStrategy) {
         this.timeStampStrategy = timeStampStrategy;
@@ -17,7 +19,7 @@ public class TickFactory {
         Tick tick = new Tick();
         tick.setTimeStamp(timeStampStrategy.getTimeStamp(recordElements[0].trim()));
         tick.setCompanyName(recordElements[1].trim().trim());
-        tick.setOrderType(recordElements[2].trim().equalsIgnoreCase("F")?OrderType.CANCEL: OrderType.NEW);
+        tick.setOrderType(recordElements[2].trim().equalsIgnoreCase("f")? OrderType.CANCEL: OrderType.NEW);
         tick.setCount(Integer.parseInt(recordElements[3].trim()));
 
         return tick;

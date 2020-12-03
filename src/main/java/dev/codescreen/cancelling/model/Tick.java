@@ -8,10 +8,6 @@ public class Tick {
     private int count;
     private OrderType orderType;
 
-    protected Tick() {
-
-    }
-
     public String getCompanyName() {
         return companyName;
     }
