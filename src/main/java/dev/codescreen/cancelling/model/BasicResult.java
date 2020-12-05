@@ -3,14 +3,12 @@ package dev.codescreen.cancelling.model;
 import java.util.HashSet;
 import java.util.Set;
 
-public class BasicResult implements Result {
-
-    private Set<String> processedCompanies;
-    private Set<String> eliminatedCompanies;
-    private Set<String> wellBehavedCompanies;
+public class BasicResult extends Result {
 
 
     public BasicResult(Set<String> processedCompanies, Set<String> eliminatedCompanies) {
+        super();
+
         this.processedCompanies = processedCompanies;
         this.eliminatedCompanies = eliminatedCompanies;
 

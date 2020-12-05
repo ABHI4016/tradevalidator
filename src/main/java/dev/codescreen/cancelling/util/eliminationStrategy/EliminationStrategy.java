@@ -8,5 +8,5 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public interface EliminationStrategy {
 
-    Result testForElimination(List<String> records, String currentCompany);
+    Result test(List<String> records, String currentCompany);
 }

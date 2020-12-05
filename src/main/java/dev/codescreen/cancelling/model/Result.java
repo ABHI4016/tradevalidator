@@ -1,4 +1,14 @@
 package dev.codescreen.cancelling.model;
 
-public interface Result {
+import java.util.Set;
+
+public abstract class Result {
+
+
+    Set<String> processedCompanies;
+    Set<String> eliminatedCompanies;
+     Set<String> wellBehavedCompanies;
+
+
+
 }

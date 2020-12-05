@@ -37,7 +37,7 @@ final class ExcessiveTradeCancellingChecker {
             List<String> records = Files.readAllLines(Paths.get("target\\classes\\Trades.data"));
             Tick tick = tickFactory.createTick(records.get(0));
 
-            Result result = eliminationStrategy.testForElimination(records, tick.getCompanyName());
+            Result result = eliminationStrategy.test(records, tick.getCompanyName());
 
             if (result instanceof BasicResult) {
                 BasicResult basicResult = (BasicResult) result;

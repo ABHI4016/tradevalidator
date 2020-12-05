@@ -16,7 +16,7 @@ public class DefaultEliminationStrategy implements EliminationStrategy {
     }
 
     @Override
-    public Result testForElimination(List<String> records, String currentCompany) {
+    public Result test(List<String> records, String currentCompany) {
         Set<String> processedCompanies = ConcurrentHashMap.newKeySet();
         Set<String> eliminatedCompanies = ConcurrentHashMap.newKeySet();
 
