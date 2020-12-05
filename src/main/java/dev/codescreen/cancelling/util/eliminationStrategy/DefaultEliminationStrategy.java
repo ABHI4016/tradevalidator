@@ -39,7 +39,7 @@ public class DefaultEliminationStrategy implements EliminationStrategy {
                 int lineNumber = lineNumbers.peek();
                 lineNumbers.removeFirst();
 
-                OrderTracker tracker = null;
+                TransactionVolumeTracker tracker = null;
                 if (eliminatedCompanies.contains(currentCompany))
                     break;
 
@@ -48,13 +48,13 @@ public class DefaultEliminationStrategy implements EliminationStrategy {
                     if (tick != null) {
                         if (tick.getCompanyName().equals(currentCompany)) {
                             if (tracker == null) {
-                                tracker = new OrderTracker();
-                                tracker.companyName = tick.getCompanyName();
-                                tracker.windowStart = tick.getTimeStamp();
+                                tracker = new TransactionVolumeTracker();
+                                tracker.setCompanyName(tick.getCompanyName());
+                                tracker.setWindowStart( tick.getTimeStamp());
                                 updateOrderCounts(tracker, tick);
                             } else {
 
-                                if (tick.getTimeStamp().equals(tracker.windowStart)) {
+                                if (tick.getTimeStamp().equals(tracker.getWindowStart())) {
                                     updateOrderCounts(tracker, tick);
                                 } else {
                                     if (validateTimeExpiry(tracker, tick)) {
@@ -119,17 +119,17 @@ public class DefaultEliminationStrategy implements EliminationStrategy {
 
     }
 
-    private void updateOrderCounts(OrderTracker tracker, Tick tick) {
+    private void updateOrderCounts(TransactionVolumeTracker tracker, Tick tick) {
         if (tick.getOrderType() == OrderType.CANCEL) {
-            tracker.cancelledOrders += tick.getCount();
+            tracker.setCancelledOrders(tracker.getCancelledOrders()+ tick.getCount());
         }
 
-        tracker.totalOrders += tick.getCount();
+        tracker.setTotalOrders(tracker.getTotalOrders()+ tick.getCount());
     }
 
 
-    private boolean validateTimeExpiry(OrderTracker tracker, Tick tick) {
-        return tick.getTimeStamp().isAfter(tracker.windowStart.plusSeconds(60));
+    private boolean validateTimeExpiry(TransactionVolumeTracker tracker, Tick tick) {
+        return tick.getTimeStamp().isAfter(tracker.getWindowStart().plusSeconds(60));
     }
 
 
